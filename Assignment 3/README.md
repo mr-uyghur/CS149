@@ -100,6 +100,10 @@ Expected Output:
 - Jenn Xu: 2
 - Tom Wu: 1
 
+What It Tests:
+- Correct behavior when only one file is given (one child, one pipe)
+- Verifies the parent still reads from the pipe and prints aggregated results with a single child
+
 ### ✅ Test Case 4 – Empty line handling
 Command:
 ```bash
@@ -116,6 +120,11 @@ Expected Output:
 - Dave Joe: 2
 - Yuan Cheng Chang: 3
 - John Smith: 1
+
+What It Tests:
+- Empty lines in input files are skipped with a warning (not counted as names)
+- Results from two children with non-overlapping names are correctly merged
+- Multi-word names (e.g. Yuan Cheng Chang) are handled correctly
 
 --- 
 ## 🧠 Lessons Learned
