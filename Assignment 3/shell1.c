@@ -24,6 +24,15 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+/*
+ * Overview:
+ * 1. Repeatedly read a command from the user.
+ * 2. If the command is countnames, create one child and one pipe per file.
+ * 3. Let all children run in parallel, each processing one file.
+ * 4. Read structured name/count messages from the pipes.
+ * 5. Combine matching names from all children and print the final totals.
+ */
+
 #define MAX_LINE 1024
 #define MAX_ARGS 256
 #define MAX_NAMES 300
@@ -48,6 +57,7 @@ typedef struct {
     int read_fd;
 } ChildPipe;
 
+/* Split the command line into argv-style tokens for execvp. */
 static int split_line(char *line, char *argv[], int max_args) {
     int argc = 0;
     char *tok = strtok(line, " \t");
@@ -59,10 +69,12 @@ static int split_line(char *line, char *argv[], int max_args) {
     return argc;
 }
 
+/* Treat either countnames or ./countnames as the A3 counting command. */
 static int is_countnames_cmd(const char *cmd) {
     return strcmp(cmd, "./countnames") == 0 || strcmp(cmd, "countnames") == 0;
 }
 
+/* Add a child's result to the running total, or create a new total entry. */
 static void add_or_sum(NameCountData totals[], int *distinct, const NameCountData *item) {
     for (int i = 0; i < *distinct; i++) {
         if (strcmp(totals[i].name, item->name) == 0) {
@@ -79,6 +91,7 @@ static void add_or_sum(NameCountData totals[], int *distinct, const NameCountDat
     }
 }
 
+/* Read until the requested number of bytes has been received. */
 static ssize_t read_all(int fd, void *buf, size_t count) {
     size_t total = 0;
     char *p = (char *)buf;
@@ -97,6 +110,7 @@ static ssize_t read_all(int fd, void *buf, size_t count) {
     return (ssize_t)total;
 }
 
+/* Read every structured message from one child pipe and aggregate it. */
 static void read_from_pipe(int fd, NameCountData totals[], int *distinct) {
     MessageHeader header;
 
@@ -157,6 +171,7 @@ int main(void) {
     char line[MAX_LINE];
 
     while (1) {
+        /* Show the prompt for the next shell command. */
         printf("%% ");
         fflush(stdout);
 
@@ -185,6 +200,7 @@ int main(void) {
             continue;
         }
 
+        /* For other commands, behave like a simple foreground shell. */
         if (!is_countnames_cmd(args[0])) {
             pid_t other = fork();
             if (other == 0) {
@@ -213,6 +229,7 @@ int main(void) {
         NameCountData totals[MAX_NAMES];
         int total_distinct = 0;
 
+        /* Clear the parent's aggregate table before this command runs. */
         for (int i = 0; i < MAX_NAMES; i++) {
             totals[i].name[0] = '\0';
             totals[i].count = 0;
@@ -253,11 +270,13 @@ int main(void) {
 
                 close(pipefd[1]);
 
+                /* Each child executes countnames on exactly one input file. */
                 char *cn_argv[] = { (char *)"./countnames", args[i], NULL };
                 execvp(cn_argv[0], cn_argv);
                 _exit(1);
             }
 
+            /* Parent keeps only the read end so it can collect child results. */
             close(pipefd[1]);
             children[child_count].pid = pid;
             children[child_count].read_fd = pipefd[0];
@@ -282,6 +301,7 @@ int main(void) {
                         pid, WTERMSIG(status));
             }
 
+            /* Find the matching pipe for the finished child and read its data. */
             for (int i = 0; i < child_count; i++) {
                 if (children[i].pid == pid) {
                     read_from_pipe(children[i].read_fd, totals, &total_distinct);
@@ -292,7 +312,7 @@ int main(void) {
             }
         }
 
-        /* print final aggregated result */
+        /* Print the final combined totals after every child has finished. */
         for (int i = 0; i < total_distinct; i++) {
             printf("%s: %d\n", totals[i].name, totals[i].count);
         }
