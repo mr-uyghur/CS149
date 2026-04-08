@@ -1,0 +1,43 @@
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# VS Code IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Compiled Object files
+*.o
+*.obj
+
+# Executables
+# (Ignoring generic executables while keeping C source files)
+*.exe
+*.out
+*.app
+*.dSYM/
+*.su
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Specific Assignment Executables (to prevent accidentally committing runtimes)
+**/countnames
+**/shell
+
+# Core dumps
+core
+vgcore.*
