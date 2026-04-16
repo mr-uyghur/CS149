@@ -41,3 +41,7 @@
 # Core dumps
 core
 vgcore.*
+
+# Temporary worksheet execution files
+fake_home/
+run_worksheet.sh
