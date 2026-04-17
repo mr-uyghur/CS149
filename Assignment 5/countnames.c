@@ -1,7 +1,7 @@
 /*
  * Author names: Frederick Nguyen | Ali Halmamat
  * Author emails: quangnguyen1705@gmail.com | ali.Halmamat@sjsu.edu
- * Last modified date: 04/13/2026
+ * Last modified date: 04/16/2026
  * Creation date: 04/13/2026
  *
  * countnames.c
