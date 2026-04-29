@@ -2,10 +2,10 @@
  * shell.c - Assignment 4
  * Author: Frederick Nguyen and Ali Halmamat
  * Parent shell process that:
- *   1. Creates a large GLOBAL shared memory region using mmap (anonymous, MAP_SHARED).
+ *   1. Creates a GLOBAL shared memory region using shm_open + mmap (MAP_SHARED).
  *   2. Divides GLOBAL into one sub-region per child process (each MAX_NAMES entries).
  *   3. Spawns one child countnames process per input file using fork() + execvp().
- *   4. Passes each child: its filename, the shm fd, its byte offset, and region size.
+ *   4. Passes each child: its filename, the shm name, its byte offset, and region size.
  *   5. Waits for ALL children to finish (wait() loop).
  *   6. Aggregates each child's results into a summation region in GLOBAL.
  *   7. Prints the final combined name counts to stdout.
@@ -14,16 +14,14 @@
  *   ./countnames names1.txt names2.txt names3.txt ...
  *
  * Compile:
- *   gcc -o shell shell.c -Wall -Werror
+ *   gcc -o shell shell.c -Wall -Werror -lrt
  *
  * Notes:
- *   - We use MAP_ANONYMOUS | MAP_SHARED so the mapping is inherited across fork().
- *   - After execvp() the child reconnects using /proc/self/fd/<fd> (Linux) because
- *     anonymous mmap regions are not preserved across exec. The fd IS preserved
- *     (unless O_CLOEXEC is set). We pass the fd number via argv so the child can
- *     call mmap() again on the same fd.
- *   - For anonymous mmap, the fd must be -1 normally, but to share across exec we
- *     use memfd_create() which gives a real (inheritable) fd backed by anonymous memory.
+ *   - We use shm_open() to create a named shared memory object, then mmap() it.
+ *   - After execvp(), children re-open the shared memory by calling shm_open()
+ *     with the same name passed via argv. This is the standard POSIX approach
+ *     for sharing memory across exec().
+ *   - shm_unlink() is called at cleanup to remove the shared memory object.
  */
 
 #include <stdio.h>
@@ -33,18 +31,13 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/syscall.h>
 
 #define MAX_NAMES    100
 #define MAX_LEN      31   /* 30 chars + null terminator */
 #define MAX_FILES    64   /* maximum number of input files */
-
-#ifdef __linux__
-static inline int my_memfd_create(const char *name, unsigned int flags) {
-    return syscall(SYS_memfd_create, name, flags);
-}
-#endif
+#define SHM_NAME     "/countnames_shm"  /* name of the shared memory object */
 
 /* Structure for one name/count entry (must match countnames.c) */
 typedef struct {
@@ -116,34 +109,19 @@ int main(int argc, char *argv[])
     size_t total_size   = (size_t)(num_files + 1) * region_size; /* +1 for sum */
 
     /* ------------------------------------------------------------------
-     * Create shared memory using memfd_create (Linux) so the fd survives
-     * execvp() in child processes.
+     * Create a named shared memory object using shm_open().
+     * Children will re-open it by name after exec().
      * ------------------------------------------------------------------ */
-#ifdef __linux__
-    int shm_fd = my_memfd_create("countnames_shm", 0);
+    int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (shm_fd == -1) {
-        perror("memfd_create");
+        perror("shm_open");
         return 1;
     }
-    /* Set the size of the memory object */
+    /* Set the size of the shared memory object */
     if (ftruncate(shm_fd, (off_t)total_size) == -1) {
         perror("ftruncate");
         return 1;
     }
-#else
-    /* Fallback for non-Linux: use a temp file */
-    char shm_path[] = "/tmp/countnames_shm_XXXXXX";
-    int shm_fd = mkstemp(shm_path);
-    if (shm_fd == -1) {
-        perror("mkstemp");
-        return 1;
-    }
-    unlink(shm_path); /* delete path; fd keeps it alive */
-    if (ftruncate(shm_fd, (off_t)total_size) == -1) {
-        perror("ftruncate");
-        return 1;
-    }
-#endif
 
     /* ------------------------------------------------------------------
      * Map the entire GLOBAL region in the parent.
@@ -166,12 +144,9 @@ int main(int argc, char *argv[])
      * ------------------------------------------------------------------ */
     pid_t pid;                   /* reused by fork loop and wait loop */
     pid_t pids[MAX_FILES];
-    int   child_ids[MAX_FILES]; /* maps pid -> child index (0-based) */
 
-    /* Convert fd, offset, and region_size to strings for execvp argv */
-    char fd_str[32];
+    /* Convert region_size to string for execvp argv */
     char region_str[32];
-    snprintf(fd_str,     sizeof(fd_str),     "%d",  shm_fd);
     snprintf(region_str, sizeof(region_str), "%zu", region_size);
 
     for (int i = 0; i < num_files; i++) {
@@ -189,14 +164,14 @@ int main(int argc, char *argv[])
         if (pid == 0) {
             /* ---- Child process ---- */
             /* Build argv for execvp:
-             *   countnames <filename> <fd> <offset> <region_size>
+             *   countnames <filename> <shm_name> <offset> <region_size>
              */
             char *child_argv[6];
             child_argv[0] = "./countnames";
-            child_argv[1] = argv[i + 1];     /* input filename */
-            child_argv[2] = fd_str;           /* shm fd number  */
-            child_argv[3] = offset_str;       /* byte offset    */
-            child_argv[4] = region_str;       /* region size    */
+            child_argv[1] = argv[i + 1];     /* input filename  */
+            child_argv[2] = SHM_NAME;        /* shm object name */
+            child_argv[3] = offset_str;       /* byte offset     */
+            child_argv[4] = region_str;       /* region size     */
             child_argv[5] = NULL;
 
             execvp("./countnames", child_argv);
@@ -205,9 +180,8 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        /* ---- Parent: record the child's pid and index ---- */
-        pids[i]      = pid;
-        child_ids[i] = i;
+        /* ---- Parent: record the child's pid ---- */
+        pids[i] = pid;
         printf("[shell] Spawned child PID %d for file: %s\n", pid, argv[i + 1]);
     }
 
@@ -224,7 +198,7 @@ int main(int argc, char *argv[])
         const char *fname = "unknown";
         for (int i = 0; i < num_files; i++) {
             if (pids[i] == pid) {
-                fname = argv[child_ids[i] + 1];
+                fname = argv[i + 1];
                 break;
             }
         }
@@ -263,10 +237,13 @@ int main(int argc, char *argv[])
     }
 
     /* ------------------------------------------------------------------
-     * Clean up: unmap and close the shared memory fd.
+     * Clean up: unmap, close fd, and unlink the shared memory object.
+     * shm_unlink removes the name; the region is freed once all
+     * processes have unmapped it.
      * ------------------------------------------------------------------ */
     munmap(GLOBAL, total_size);
     close(shm_fd);
+    shm_unlink(SHM_NAME);
 
     return 0;
 }

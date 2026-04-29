@@ -6,24 +6,26 @@
  *
  * countnames.c - Assignment 4
  * Counts occurrences of each name in an input file.
- * For A4, when called with a shared memory file descriptor and offset,
+ * For A4, when called with a shared memory name and offset,
  * writes results directly into the assigned shared memory region.
  *
  *
  * Usage (A4-style, via shell with shared memory):
- *   ./countnames filename fd offset region_size
+ *   ./countnames filename shm_name offset region_size
  *     filename    : input file to process
- *     fd          : file descriptor of shared memory (passed from shell via shm_open)
+ *     shm_name    : name of the shared memory object (e.g. "/countnames_shm")
  *     offset      : byte offset into shared memory for this child's region
  *     region_size : size in bytes of this child's region
  *
- * Compile: gcc -o countnames countnames.c -Wall -Werror
+ * Compile: gcc -o countnames countnames.c -Wall -Werror -lrt
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #define MAX_NAMES    100
@@ -92,14 +94,21 @@ int main(int argc, char *argv[])
 {
     /*
      * ---------- A4 shared-memory mode ----------
-     * argv: countnames <filename> <fd> <offset> <region_size>
+     * argv: countnames <filename> <shm_name> <offset> <region_size>
      *   argc == 5
      */
     if (argc == 5) {
         const char *filename    = argv[1];
-        int         shm_fd      = atoi(argv[2]);
+        const char *shm_name    = argv[2];
         size_t      offset      = (size_t)atol(argv[3]);
         size_t      region_size = (size_t)atol(argv[4]);
+
+        /* Re-open the shared memory object by name (created by parent shell) */
+        int shm_fd = shm_open(shm_name, O_RDWR, 0);
+        if (shm_fd == -1) {
+            perror("countnames: shm_open");
+            return 1;
+        }
 
         /* Open input file */
         FILE *fp = fopen(filename, "r");
@@ -121,8 +130,12 @@ int main(int argc, char *argv[])
         if (map == MAP_FAILED) {
             perror("countnames: mmap");
             fclose(fp);
+            close(shm_fd);
             return 1;
         }
+
+        /* fd can be closed after mmap; the mapping persists independently */
+        close(shm_fd);
 
         /* Advance to this child's assigned sub-region */
         NameCountData *region = (NameCountData *)((char *)map + offset);
