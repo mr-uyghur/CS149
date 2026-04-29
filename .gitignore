@@ -45,3 +45,6 @@ vgcore.*
 # Temporary worksheet execution files
 fake_home/
 run_worksheet.sh
+
+# AI Plans
+Worksheet Bonus/
