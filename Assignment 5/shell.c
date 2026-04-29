@@ -18,7 +18,7 @@
  *   5. Prints aggregated counts, then frees every byte of allocated memory.
  */
 
-// REVIEW: We define _GNU_SOURCE at the top because we use memfd_create()
+// We define _GNU_SOURCE at the top because we use memfd_create()
 // later on, which is a Linux-specific function. Without this define,
 // the compiler won't find that function declaration.
 #define _GNU_SOURCE
@@ -34,30 +34,21 @@
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-// REVIEW: These constants set the upper limits for how much data each
-// child process can handle. MAX_NAMES_PER_CHILD caps distinct names at
-// 200 per file, and NAME_LEN caps each name at 100 characters.
-// These are intentionally generous for typical input but still bounded
-// so we know exactly how much shared memory to allocate.
+// Caps data per child process: max 200 distinct names, 100 chars each.
+// Bounded to determine exactly how much shared memory to allocate.
 #define MAX_NAMES_PER_CHILD  200
 #define NAME_LEN             100
 
-// REVIEW: This is the starting size for our hash table in the parent.
-// We start small at 10 buckets, but the table_insert function will
-// double this automatically when the load factor exceeds 1. So we're
-// not locked into this number — it's just a reasonable starting point.
+// Starting hash table size in the parent.
+// Automatically doubles when load factor > 1.
 #define INITIAL_BUCKETS      10
 
 /* ------------------------------------------------------------------ */
 /*  Shared-memory record layout  (must match countnames.c)            */
 /* ------------------------------------------------------------------ */
 
-// REVIEW: This struct is the contract between shell.c and countnames.c.
-// Both files define the exact same layout — a fixed-size char array for
-// the name and an int for the count. Because it's going into shared
-// memory via mmap, using a fixed-size char array (not a pointer) is
-// critical. A pointer would be meaningless across process boundaries
-// because each process has its own virtual address space.
+// Shared struct for shell.c and countnames.c via mmap.
+// Uses a fixed-size array since pointers are invalid across process boundaries.
 typedef struct {
     char name[NAME_LEN];
     int  count;
@@ -67,7 +58,7 @@ typedef struct {
 /*  Parent's dynamic hash-table node                                  */
 /* ------------------------------------------------------------------ */
 
-// REVIEW: Now this struct is different from NameEntry above. This one
+// Now this struct is different from NameEntry above. This one
 // is used ONLY in the parent process for the final aggregation step.
 // Notice the key difference: the name field here is a char POINTER,
 // not a fixed-size array. That's because in the parent's own address
@@ -84,7 +75,7 @@ typedef struct NameCountData {
 /*  Cleanup helper – called on every error path                       */
 /* ------------------------------------------------------------------ */
 
-// REVIEW: This is our centralized cleanup function. Anytime something
+// This is our centralized cleanup function. Anytime something
 // goes wrong — whether it's a failed mmap, a failed fork, whatever —
 // we call this to unmap shared memory segments, close file descriptors,
 // and free the helper arrays. The key insight here is that we initialized
@@ -108,7 +99,7 @@ static void cleanup(int *shm_fds, NameEntry **shm_maps,
 /*  Hash-table: insert / resize / free / print                        */
 /* ------------------------------------------------------------------ */
 
-// REVIEW: This is djb2, a classic string hashing function created by
+// This is djb2, a classic string hashing function created by
 // Daniel J. Bernstein. The magic number 5381 is the initial hash value,
 // and each character gets folded in with the formula h*33 + c. The bit
 // shift (h << 5) plus h is a fast way to compute h*33. At the end we
@@ -123,7 +114,7 @@ static unsigned int hash_name(const char *name, int nbuckets)
     return (unsigned int)(h % (unsigned long)nbuckets);
 }
 
-// REVIEW: table_insert is the heart of our hash table implementation.
+// table_insert is the heart of our hash table implementation.
 // It does three things: (1) searches for an existing name and bumps its
 // count if found, (2) allocates a new node with malloc + strdup if the
 // name is new, and (3) checks whether the hash table has gotten too full
@@ -136,7 +127,7 @@ static NameCountData **table_insert(NameCountData **table,
 {
     unsigned int idx = hash_name(name, *nbuckets);
 
-    // REVIEW: First we walk the linked list (the chain) at bucket[idx]
+    // First we walk the linked list (the chain) at bucket[idx]
     // looking for a matching name. If we find it, we just add delta to
     // the existing count and return immediately — no allocation needed.
     NameCountData *node = table[idx];
@@ -148,7 +139,7 @@ static NameCountData **table_insert(NameCountData **table,
         node = node->next;
     }
 
-    // REVIEW: If we get here, the name wasn't in the table. So we
+    // If we get here, the name wasn't in the table. So we
     // malloc a new NameCountData node. Notice we're checking for NULL
     // right after — good practice, because malloc CAN fail if you're
     // out of memory.
@@ -157,7 +148,7 @@ static NameCountData **table_insert(NameCountData **table,
         perror("malloc: new hash node");
         exit(1);
     }
-    // REVIEW: Here's where strdup comes in. strdup() is essentially
+    // Here's where strdup comes in. strdup() is essentially
     // malloc + strcpy rolled into one — it allocates a new buffer on
     // the heap and copies the string into it. This is important because
     // the 'name' pointer we received might point to shared memory that
@@ -171,13 +162,13 @@ static NameCountData **table_insert(NameCountData **table,
         exit(1);
     }
     newnode->count = delta;
-    // REVIEW: We prepend the new node to the front of the bucket's chain.
+    // We prepend the new node to the front of the bucket's chain.
     // This is O(1) insertion — we just set the new node's next pointer to
     // the current head of the list, then make the new node the head.
     newnode->next  = table[idx];
     table[idx]     = newnode;
 
-    // REVIEW: After every insertion, we count the total number of distinct
+    // After every insertion, we count the total number of distinct
     // names across ALL buckets. This is our load factor check. If total
     // exceeds the number of buckets, that means on average each bucket has
     // more than one entry, so collisions are getting frequent. Time to
@@ -188,7 +179,7 @@ static NameCountData **table_insert(NameCountData **table,
         while (n != NULL) { total++; n = n->next; }
     }
 
-    // REVIEW: Here's the resize logic. We double the bucket count and
+    // Here's the resize logic. We double the bucket count and
     // use realloc() to grow the array. This is one of the key requirements
     // of the assignment — demonstrating realloc. Notice we save the result
     // of realloc to a NEW variable 'newtable', not back into 'table'
@@ -205,7 +196,7 @@ static NameCountData **table_insert(NameCountData **table,
             perror("realloc: bucket array");
             exit(1);
         }
-        // REVIEW: The newly added bucket slots (from old_n to new_n - 1)
+        // The newly added bucket slots (from old_n to new_n - 1)
         // contain garbage values after realloc. We MUST zero them out,
         // otherwise we'd be dereferencing garbage pointers when we try
         // to traverse those chains later.
@@ -215,7 +206,7 @@ static NameCountData **table_insert(NameCountData **table,
         *nbuckets = new_n;
         table     = newtable;
 
-        // REVIEW: After resizing, we need to rehash everything. The
+        // After resizing, we need to rehash everything. The
         // bucket index for each name depends on the bucket count (because
         // of the modulo in hash_name), so when we double the buckets,
         // names might belong in different buckets now. We collect all
@@ -246,7 +237,7 @@ static NameCountData **table_insert(NameCountData **table,
     return table;
 }
 
-// REVIEW: table_free walks every bucket, and for each node in the chain,
+// table_free walks every bucket, and for each node in the chain,
 // it frees BOTH the strdup'd name string AND the node struct itself.
 // The order matters here — we save node->next BEFORE freeing the node,
 // otherwise we'd be reading freed memory. Finally we free the bucket
@@ -265,7 +256,7 @@ static void table_free(NameCountData **table, int nbuckets)
     free(table);                /* free the bucket pointer array */
 }
 
-// REVIEW: Simple traversal — just iterate every bucket, walk each chain,
+// Simple traversal — just iterate every bucket, walk each chain,
 // and print "name: count". Nothing fancy here.
 static void table_print(NameCountData **table, int nbuckets)
 {
@@ -284,7 +275,7 @@ static void table_print(NameCountData **table, int nbuckets)
 
 int main(int argc, char *argv[])
 {
-    // REVIEW: Standard argument check — we need at least one filename.
+    // Standard argument check — we need at least one filename.
     // If the user runs "./shell1" with no arguments, we print usage and
     // exit. argv[0] is the program name, so the actual filenames start
     // at argv[1].
@@ -293,14 +284,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // REVIEW: nfiles is the number of input files, and shm_size is how
+    // nfiles is the number of input files, and shm_size is how
     // many bytes each shared-memory segment needs. Each segment holds
     // MAX_NAMES_PER_CHILD entries of type NameEntry, so this gives us
     // the exact byte count for mmap.
     int    nfiles   = argc - 1;
     size_t shm_size = sizeof(NameEntry) * MAX_NAMES_PER_CHILD;
 
-    // REVIEW: We dynamically allocate two parallel arrays — one for the
+    // We dynamically allocate two parallel arrays — one for the
     // file descriptors and one for the mmap pointers. We use malloc here
     // (not stack arrays) because the assignment requires demonstrating
     // dynamic memory management. We also check that both mallocs succeed
@@ -317,7 +308,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // REVIEW: This initialization loop is critical for correctness.
+    // This initialization loop is critical for correctness.
     // We set every fd to -1 and every map pointer to NULL. Why? Because
     // if something fails midway through the next loop, our cleanup()
     // function will iterate over ALL slots. If a slot was never actually
@@ -329,7 +320,7 @@ int main(int argc, char *argv[])
         shm_maps[i] = NULL;
     }
 
-    // REVIEW: Now we create one shared memory segment per input file.
+    // Now we create one shared memory segment per input file.
     // We use memfd_create(), which is a Linux-specific call that creates
     // an anonymous file backed by memory — no actual file on disk.
     // The key advantage over shm_open is that we don't have to worry
@@ -344,7 +335,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        // REVIEW: memfd_create gives us a zero-length fd, so we have to
+        // memfd_create gives us a zero-length fd, so we have to
         // grow it with ftruncate to the size we actually need. Without
         // this, mmap would fail because there's no backing storage.
         if (ftruncate(shm_fds[i], (off_t)shm_size) == -1) {
@@ -353,7 +344,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        // REVIEW: Now we mmap the segment in the parent. PROT_READ |
+        // Now we mmap the segment in the parent. PROT_READ |
         // PROT_WRITE gives us read-write access, and MAP_SHARED is the
         // critical flag — it means changes made by child processes will
         // be visible to the parent. If we used MAP_PRIVATE instead,
@@ -370,7 +361,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // REVIEW: Here's where the parallel execution happens. We fork one
+    // Here's where the parallel execution happens. We fork one
     // child per file, and — this is important — we do ALL the forks
     // BEFORE any wait() calls. That's what makes the children run in
     // parallel. If we'd done fork-then-wait inside the same loop, each
@@ -384,7 +375,7 @@ int main(int argc, char *argv[])
         pid_t pid = fork();
 
         if (pid < 0) {
-            // REVIEW: If fork fails, we can't just bail out — we'd leave
+            // If fork fails, we can't just bail out — we'd leave
             // zombie processes. So we reap every child we already spawned,
             // then clean up shared memory and exit.
             perror("fork");
@@ -395,7 +386,7 @@ int main(int argc, char *argv[])
         }
 
         if (pid == 0) {
-            // REVIEW: We're now in the child process. The first thing we
+            // We're now in the child process. The first thing we
             // do is close every OTHER child's shared memory fd and unmap
             // their segments. Child i only needs segment i — giving it
             // access to segment j would be a security/correctness risk.
@@ -406,7 +397,7 @@ int main(int argc, char *argv[])
                     close(shm_fds[j]);
                 }
             }
-            // REVIEW: We convert the fd number to a string so we can pass
+            // We convert the fd number to a string so we can pass
             // it as a command-line argument to countnames via execl.
             // Important: we save the fd string BEFORE freeing the arrays
             // below. Also notice we unmap our OWN segment here too — the
@@ -418,7 +409,7 @@ int main(int argc, char *argv[])
             free(shm_fds);
             free(shm_maps);
 
-            // REVIEW: execl replaces this child's entire process image
+            // execl replaces this child's entire process image
             // with the countnames program. We pass three arguments: the
             // program path, the input filename, and the fd string. The
             // NULL terminates the argument list. If execl succeeds, the
@@ -433,7 +424,7 @@ int main(int argc, char *argv[])
         children_spawned++;
     }
 
-    // REVIEW: Now the parent waits for all children. We use wait() — not
+    // Now the parent waits for all children. We use wait() — not
     // waitpid with a specific PID. The difference is important: wait()
     // returns WHICHEVER child finishes next. If we had stored PIDs in an
     // array and called waitpid(pids[0]), then waitpid(pids[1]), etc., we'd
@@ -447,7 +438,7 @@ int main(int argc, char *argv[])
             perror("wait");
             break;
         }
-        // REVIEW: We check the exit status of each child. WIFEXITED tells
+        // We check the exit status of each child. WIFEXITED tells
         // us the child terminated normally (not by a signal), and
         // WEXITSTATUS extracts the exit code. If a child returned non-zero,
         // we print a warning but keep going — one failed file shouldn't
@@ -457,7 +448,7 @@ int main(int argc, char *argv[])
                     finished, WEXITSTATUS(status));
     }
 
-    // REVIEW: All children are done. Their results are sitting in the
+    // All children are done. Their results are sitting in the
     // mmap'd segments. Now we aggregate everything into a single hash
     // table. We start with INITIAL_BUCKETS (10) slots, all set to NULL.
     // As we insert names, table_insert will automatically double the
@@ -473,7 +464,7 @@ int main(int argc, char *argv[])
     for (int b = 0; b < nbuckets; b++)
         table[b] = NULL;
 
-    // REVIEW: We iterate over every child's shared memory segment and
+    // We iterate over every child's shared memory segment and
     // insert each name-count pair into our hash table. The sentinel is
     // name[0] == '\0' — when countnames runs out of names to store, the
     // remaining entries in the segment are still zero'd out from memset,
@@ -488,7 +479,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // REVIEW: Finally, we print the aggregated results, then free
+    // Finally, we print the aggregated results, then free
     // EVERYTHING. The order here is important — we free the hash table
     // first (table_free handles nodes + strdup strings), then cleanup
     // handles the mmap segments, file descriptors, and helper arrays.
