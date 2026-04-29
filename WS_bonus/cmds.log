@@ -1,0 +1,15 @@
+  1  pwd
+  2  cd ~
+  3  cd Desktop/
+  4  ls -latr
+  5  mkdir cs149
+  6  cd cs149
+  7  git init
+  8  git remote add origin https://github.com/mr-uyghur/CS149.git
+  9  git config --global user.email "mruyghur@example.com"
+ 10  git config --global user.name "mr-uyghur"
+ 11  mkdir WS_bonus
+ 12  cd WS_bonus
+ 13  wget -O out.pdf https://tinyurl.com/yy94jltt
+ 14  ls -latr
+ 15  history > cmds.log

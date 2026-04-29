@@ -1,0 +1,9 @@
+  1  cd ~
+  2  git clone git://g.csail.mit.edu/xv6-labs-2023
+  3  cd xv6-labs-2023
+  4  make qemu
+  5  nano user/sleep.c
+  6  nano Makefile
+  7  make qemu
+  8  ./grade-lab-util sleep
+  9  history > worksheetB.log
