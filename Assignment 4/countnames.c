@@ -10,7 +10,7 @@
  * writes results directly into the assigned shared memory region.
  *
  *
- * Usage (A4-style, via shell with shared memory):
+ * Usage (A4-style, via shell1 with shared memory):
  *   ./countnames filename shm_name offset region_size
  *     filename    : input file to process
  *     shm_name    : name of the shared memory object (e.g. "/countnames_shm")
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
         size_t      offset      = (size_t)atol(argv[3]);
         size_t      region_size = (size_t)atol(argv[4]);
 
-        /* Re-open the shared memory object by name (created by parent shell) */
+        /* Re-open the shared memory object by name (created by parent shell1) */
         int shm_fd = shm_open(shm_name, O_RDWR, 0);
         if (shm_fd == -1) {
             perror("countnames: shm_open");

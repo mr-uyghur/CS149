@@ -12,7 +12,7 @@
 ## Overview
 
 This assignment extends A1–A3 by replacing pipe-based IPC with **shared memory** using `mmap()`.  
-The parent (`shell.c`) allocates a large `GLOBAL` shared memory region, divides it into per-child  
+The parent (`shell1.c`) allocates a large `GLOBAL` shared memory region, divides it into per-child  
 sub-regions, spawns one `countnames` child per input file, and then aggregates all results into a  
 summation region before printing the final combined name counts.
 
@@ -22,7 +22,7 @@ summation region before printing the final combined name counts.
 
 ```bash
 gcc -o countnames countnames.c -Wall -Werror
-gcc -o shell      shell.c      -Wall -Werror
+gcc -o shell1      shell1.c      -Wall -Werror
 ```
 ---
 
@@ -31,7 +31,7 @@ gcc -o shell      shell.c      -Wall -Werror
 ### Shell (A4 mode — shared memory, multiple files)
 
 ```bash
-./shell test/names1.txt test/names2.txt test/names3.txt
+./shell1 test/names1.txt test/names2.txt test/names3.txt
 ```
 
 ### countnames standalone (A1 mode — single file)
@@ -56,7 +56,7 @@ cat test/names1.txt test/names2.txt | ./countnames
 
 **Command:**
 ```bash
-./shell test/names1.txt test/names2.txt test/names3.txt
+./shell1 test/names1.txt test/names2.txt test/names3.txt
 ```
 
 **What it tests:**  
@@ -125,7 +125,7 @@ Warning - file test/names1.txt line 2 is empty.
 
 **Command:**
 ```bash
-./shell test/nonexistent.txt
+./shell1 test/nonexistent.txt
 ```
 
 **What it tests:**  
@@ -153,7 +153,7 @@ error: cannot open file test/nonexistent.txt
 
 **Command:**
 ```bash
-./shell test/empty_lines.txt
+./shell1 test/empty_lines.txt
 ```
 
 **What it tests:**  
@@ -183,7 +183,7 @@ Warning - file test/empty_lines.txt line 2 is empty.
 
 **Command:**
 ```bash
-./shell test/single_name.txt
+./shell1 test/single_name.txt
 ```
 
 **What it tests:**  
@@ -211,7 +211,7 @@ Alice: 3
 
 **Command:**
 ```bash
-./shell test/spaces.txt
+./shell1 test/spaces.txt
 ```
 
 **What it tests:**  

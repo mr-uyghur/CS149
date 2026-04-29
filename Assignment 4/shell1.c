@@ -1,7 +1,7 @@
 /*
- * shell.c - Assignment 4
+ * shell1.c - Assignment 4
  * Author: Frederick Nguyen and Ali Halmamat
- * Parent shell process that:
+ * Parent shell1 process that:
  *   1. Creates a GLOBAL shared memory region using shm_open + mmap (MAP_SHARED).
  *   2. Divides GLOBAL into one sub-region per child process (each MAX_NAMES entries).
  *   3. Spawns one child countnames process per input file using fork() + execvp().
@@ -14,7 +14,7 @@
  *   ./countnames names1.txt names2.txt names3.txt ...
  *
  * Compile:
- *   gcc -o shell shell.c -Wall -Werror -lrt
+ *   gcc -o shell1 shell1.c -Wall -Werror -lrt
  *
  * Notes:
  *   - We use shm_open() to create a named shared memory object, then mmap() it.
