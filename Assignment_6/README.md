@@ -2,7 +2,7 @@
 
 ## Student Name(s)
 
-*(Fill in your name(s) here)*
+Frederick Nguyen (quangnguyen1705@gmail.com) | Ali Halmamat (ali.Halmamat@sjsu.edu)
 
 ---
 

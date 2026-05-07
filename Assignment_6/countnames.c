@@ -137,11 +137,39 @@ static void *thread_func(void *arg)
 
 /* ---------- main ---------- */
 
+/*
+ * read_stream - reads names line-by-line from an already-open FILE*
+ * and updates the shared namecounts array.  Used for stdin fallback.
+ */
+static void read_stream(FILE *fp)
+{
+    char   *line    = NULL;
+    size_t  linecap = 0;
+    ssize_t nread;
+
+    while ((nread = getline(&line, &linecap, fp)) != -1) {
+        trim_newline(line);
+        if (line[0] == '\0') continue;
+
+        pthread_mutex_lock(&nc_mutex);
+        update_count(line);
+        pthread_mutex_unlock(&nc_mutex);
+    }
+    free(line);
+}
+
 int main(int argc, char *argv[])
 {
+    /* No files given — read from stdin (single-threaded) */
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <file1> [file2 ...]\n", argv[0]);
-        return EXIT_FAILURE;
+        read_stream(stdin);
+
+        for (int i = 0; i < num_names; i++) {
+            printf("%s: %d\n", namecounts[i].name, namecounts[i].count);
+        }
+        free(namecounts);
+        pthread_mutex_destroy(&nc_mutex);
+        return EXIT_SUCCESS;
     }
 
     int num_files = argc - 1;
